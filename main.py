@@ -1,11 +1,12 @@
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from keras.models import Sequential
-from keras.layers import Conv2D,MaxPooling2D,Flatten,Dense
+from keras.models import Sequential, load_model
+from keras.layers import Conv2D,MaxPooling2D,Flatten,Dense,Dropout
 from keras.optimizers import Adam
 from keras.losses import BinaryCrossentropy
-import cv2 as cv
 import numpy as np
+from sklearn.metrics import confusion_matrix, classification_report
+import seaborn as sns
 
 train_dir = "train"
 test_dir = "test"
@@ -18,7 +19,7 @@ data_train = tf.keras.utils.image_dataset_from_directory(train_dir,batch_size=16
 data_gen_train = data_train.as_numpy_iterator()
 batch_train = data_gen_train.next()
 
-data_test = tf.keras.utils.image_dataset_from_directory(test_dir,batch_size=16,image_size =(48,48))
+data_test = tf.keras.utils.image_dataset_from_directory(test_dir,batch_size=32,image_size =(48,48))
 data_gen_test = data_test.as_numpy_iterator()
 batch_test = data_gen_test.next()
 
@@ -55,12 +56,15 @@ CNN_model = Sequential()
 
 CNN_model.add(Conv2D(16,(3,3),1, activation='relu', input_shape=(48,48,3)))
 CNN_model.add(MaxPooling2D(pool_size=(2,2)))
+CNN_model.add(Dropout(0.1))
 
 CNN_model.add(Conv2D(32, (3,3),1,activation='relu'))
 CNN_model.add(MaxPooling2D(pool_size=(2,2)))
+CNN_model.add(Dropout(0.2))
 
 CNN_model.add(Conv2D(16, (3,3),1,activation='relu'))
 CNN_model.add(MaxPooling2D(pool_size=(2,2)))
+CNN_model.add(Dropout(0.1))
 
 CNN_model.add(Flatten())
 
@@ -68,8 +72,50 @@ CNN_model.add(Dense(256, activation='relu'))
 CNN_model.add(Dense(1, activation='sigmoid'))
 
 CNN_model.compile(optimizer=Adam(learning_rate=0.0001),loss=BinaryCrossentropy(), metrics=['accuracy'])
-CNN_model.fit(train_dataset, epochs=50, validation_data=validation_dataset)
+history = CNN_model.fit(train_dataset, epochs=50, validation_data=validation_dataset)
 
 #version 1.0.1
 #accuracy = 85.13% la validare
+
+plt.subplot(121)
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('model accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+
+plt.subplot(122)
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+
+plt.show()
+
+CNN_model.save('emotion_detection_cnn_50epochs_Dropout_v102.h5', include_optimizer=True)
+
+# saved_model = load_model('emotion_detection_cnn_50epochs_Dropout_v102.h5',compile=False)
+
+
+predicted_labels = []
+batch = data_test.as_numpy_iterator().next()
+test_images, test_labels = batch
+predictions = CNN_model.predict(test_images)
+
+for p in predictions:
+    if p < 0.5:
+        predicted_labels.append(0)
+    else:
+        predicted_labels.append(1)
+
+print(CNN_model.evaluate(data_test))
+print(classification_report(test_labels,predicted_labels))
+
+cm = confusion_matrix(test_labels, predicted_labels)
+plt.figure()
+plt.title('version 1.0.2')
+sns.heatmap(cm,annot=True,fmt='g', xticklabels=['angry','not_angry'], yticklabels=['angry','not_angry'])
+plt.show()
+
 
